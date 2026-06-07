@@ -78,15 +78,9 @@ DEFAULT_SOURCES = [
         "enabled": True,
         "keywords": ["브리핑", "회의"],
     },
-    {
-        "id": "sns-public",
-        "name": "X / Facebook 공개 계정",
-        "type": "web",
-        "url": "",
-        "enabled": False,
-        "keywords": ["대통령", "비서실장", "정책실장", "홍보수석", "안보실장", "정무수석"],
-    },
 ]
+
+SOURCE_TYPES = {"naver", "youtube"}
 
 
 def utc_now() -> str:
@@ -131,6 +125,30 @@ class Store:
         self.data.setdefault(
             "cycle_state", {"running": False, "started_at": None, "finished_at": None}
         )
+        self.remove_unsupported_sources()
+
+    def remove_unsupported_sources(self) -> None:
+        original_sources = self.data.get("sources", [])
+        supported_sources = [
+            source
+            for source in original_sources
+            if isinstance(source, dict) and source.get("type") in SOURCE_TYPES
+        ]
+        if len(supported_sources) == len(original_sources):
+            return
+        supported_ids = {source["id"] for source in supported_sources}
+        self.data["sources"] = supported_sources
+        self.data["initialized_sources"] = [
+            source_id
+            for source_id in self.data.get("initialized_sources", [])
+            if source_id in supported_ids
+        ]
+        self.data["statuses"] = {
+            source_id: status
+            for source_id, status in self.data.get("statuses", {}).items()
+            if source_id in supported_ids
+        }
+        self.save()
 
     def save(self) -> None:
         with self.lock:
@@ -166,9 +184,9 @@ class Store:
             for source in sources:
                 if not isinstance(source, dict):
                     raise ValueError("출처 설정 형식이 올바르지 않습니다.")
-                source_type = str(source.get("type", "web"))
-                if source_type not in {"naver", "youtube", "web"}:
-                    source_type = "web"
+                source_type = str(source.get("type", "naver"))
+                if source_type not in SOURCE_TYPES:
+                    continue
                 clean_sources.append(
                     {
                         "id": str(source.get("id") or f"source-{time.time_ns()}"),
@@ -487,30 +505,6 @@ def youtube_live_status(video_url: str) -> str:
     return ""
 
 
-def collect_web(source: dict[str, Any]) -> list[dict[str, Any]]:
-    page, resolved_url = fetch(source["url"])
-    anchors = re.findall(
-        r'<a[^>]+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>', page, flags=re.I | re.S
-    )
-    items = []
-    for href, raw_title in anchors:
-        title = clean_text(raw_title)
-        matches = keyword_matches(title, source["keywords"])
-        if not title or (source["keywords"] and not matches):
-            continue
-        link = urllib.parse.urljoin(resolved_url, html.unescape(href))
-        if normalize_url(link):
-            items.append(
-                {
-                    "title": title[:300],
-                    "link": link,
-                    "published": "",
-                    "matched_keywords": matches,
-                }
-            )
-    return items[:100]
-
-
 def run_cycle() -> bool:
     if not cycle_lock.acquire(blocking=False):
         return False
@@ -526,7 +520,7 @@ def run_cycle() -> bool:
                 elif source["type"] == "youtube":
                     items = collect_youtube(source)
                 else:
-                    items = collect_web(source)
+                    continue
                 added, baseline = store.add_items(source, items)
                 message = (
                     f"기준점 설정 · 기존 링크 {len(items)}개 제외"

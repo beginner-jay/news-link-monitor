@@ -15,9 +15,7 @@ function renderSourceStatus(node, source) {
   if (status) {
     statusNode.textContent = `${status.ok ? "정상" : "오류"} · ${status.message} · ${formatTime(status.checked_at)}`;
   } else {
-    statusNode.textContent = source.type === "web"
-      ? "X·Facebook은 공개 접근을 허용한 페이지만 확인할 수 있습니다."
-      : "아직 확인 전입니다.";
+    statusNode.textContent = "아직 확인 전입니다.";
   }
 }
 
@@ -110,7 +108,7 @@ function readSources() {
 }
 
 el("add-source").onclick = () => {
-  const source = { id: `source-${Date.now()}`, enabled: true, name: "", type: "web", url: "", keywords: [] };
+  const source = { id: `source-${Date.now()}`, enabled: true, name: "", type: "naver", url: "", keywords: [] };
   el("sources").appendChild(sourceCard(source));
 };
 el("save").onclick = async () => {

@@ -64,6 +64,33 @@ class StoreTests(unittest.TestCase):
         backup = json.loads(self.data_file.with_suffix(".json.bak").read_text("utf-8"))
         self.assertEqual(backup["last_cycle"], "first")
 
+    def test_existing_unsupported_sources_are_removed_on_load(self):
+        self.data_file.write_text(
+            json.dumps(
+                {
+                    "interval_seconds": 180,
+                    "sources": [
+                        {"id": "n", "type": "naver", "name": "뉴스", "url": "", "enabled": True, "keywords": []},
+                        {"id": "w", "type": "web", "name": "SNS", "url": "", "enabled": False, "keywords": []},
+                    ],
+                    "items": [],
+                    "seen": [],
+                    "statuses": {"w": {"ok": False}},
+                    "last_cycle": None,
+                    "initialized_sources": ["n", "w"],
+                    "cycle_state": {"running": False, "started_at": None, "finished_at": None},
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        store = app.Store()
+
+        self.assertEqual([source["id"] for source in store.data["sources"]], ["n"])
+        self.assertEqual(store.data["initialized_sources"], ["n"])
+        self.assertEqual(store.data["statuses"], {})
+
 
 class CollectorTests(unittest.TestCase):
     def test_naver_fallback_does_not_accept_unrelated_link(self):
@@ -120,6 +147,26 @@ class ValidationTests(unittest.TestCase):
 
     def test_ssl_context_has_certificate_authorities(self):
         self.assertGreater(app.SSL_CONTEXT.cert_store_stats()["x509_ca"], 0)
+
+    def test_settings_drop_unsupported_source_types(self):
+        store = FakeStore()
+        store.data = {
+            "interval_seconds": 180,
+            "sources": [],
+            "initialized_sources": [],
+            "statuses": {},
+        }
+        app.Store.replace_settings(
+            store,
+            {
+                "interval_seconds": 180,
+                "sources": [
+                    {"id": "x", "type": "web", "name": "SNS", "url": "https://x.com", "keywords": []},
+                    {"id": "n", "type": "naver", "name": "뉴스", "url": "https://news.naver.com", "keywords": []},
+                ],
+            },
+        )
+        self.assertEqual([source["id"] for source in store.data["sources"]], ["n"])
 
 
 class ExportTests(unittest.TestCase):
