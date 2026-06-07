@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import html
 import json
 import os
@@ -23,6 +24,7 @@ from xml.etree import ElementTree
 ROOT = Path(__file__).resolve().parent
 DATA_FILE = ROOT / "data.json"
 STATIC_DIR = ROOT / "static"
+EXPORT_DIR = ROOT / "exports"
 HOST = "127.0.0.1"
 PORT = int(os.environ.get("NEWS_LINK_MONITOR_PORT", "8765"))
 USER_AGENT = (
@@ -88,6 +90,10 @@ DEFAULT_SOURCES = [
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def export_timestamp() -> str:
+    return datetime.now().strftime("%Y%m%d-%H%M%S")
 
 
 def initial_data() -> dict[str, Any]:
@@ -250,6 +256,23 @@ class Store:
             else:
                 state["finished_at"] = utc_now()
             self.save()
+
+
+def export_items_to_csv(data: dict[str, Any], export_dir: Path = EXPORT_DIR) -> Path | None:
+    items = data.get("items", [])
+    if not items:
+        return None
+    export_dir.mkdir(parents=True, exist_ok=True)
+    path = export_dir / f"news-links-{export_timestamp()}.csv"
+    headers = ["found_at", "source", "title", "link", "matched_keywords", "live_status"]
+    with path.open("w", newline="", encoding="utf-8-sig") as csv_file:
+        writer = csv.DictWriter(csv_file, fieldnames=headers, extrasaction="ignore")
+        writer.writeheader()
+        for item in items:
+            row = dict(item)
+            row["matched_keywords"] = ", ".join(item.get("matched_keywords", []))
+            writer.writerow(row)
+    return path
 
 
 store = Store()
@@ -581,6 +604,11 @@ def main() -> None:
     finally:
         stop_event.set()
         server.server_close()
+        exported = export_items_to_csv(store.snapshot())
+        if exported:
+            print(f"CSV 파일로 저장했습니다: {exported}")
+        else:
+            print("저장할 새 링크가 없어 CSV 파일을 만들지 않았습니다.")
 
 
 if __name__ == "__main__":

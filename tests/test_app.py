@@ -122,5 +122,37 @@ class ValidationTests(unittest.TestCase):
         self.assertGreater(app.SSL_CONTEXT.cert_store_stats()["x509_ca"], 0)
 
 
+class ExportTests(unittest.TestCase):
+    def test_export_items_to_csv_writes_expected_columns(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            with patch.object(app, "export_timestamp", return_value="20260607-123456"):
+                path = app.export_items_to_csv(
+                    {
+                        "items": [
+                            {
+                                "found_at": "2026-06-07T00:00:00+00:00",
+                                "source": "네이버 뉴스",
+                                "title": "대통령 일정",
+                                "link": "https://example.com/news",
+                                "matched_keywords": ["대통령", "일정"],
+                                "live_status": "",
+                            }
+                        ]
+                    },
+                    Path(temporary),
+                )
+
+            self.assertIsNotNone(path)
+            self.assertEqual(path.name, "news-links-20260607-123456.csv")
+            content = path.read_text(encoding="utf-8-sig")
+            self.assertIn("found_at,source,title,link,matched_keywords,live_status", content)
+            self.assertIn("대통령, 일정", content)
+
+    def test_export_items_to_csv_skips_empty_items(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            self.assertIsNone(app.export_items_to_csv({"items": []}, Path(temporary)))
+            self.assertEqual(list(Path(temporary).iterdir()), [])
+
+
 if __name__ == "__main__":
     unittest.main()
