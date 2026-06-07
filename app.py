@@ -27,6 +27,7 @@ STATIC_DIR = ROOT / "static"
 EXPORT_DIR = ROOT / "exports"
 HOST = "127.0.0.1"
 PORT = int(os.environ.get("NEWS_LINK_MONITOR_PORT", "8765"))
+CLIENT_TIMEOUT_SECONDS = int(os.environ.get("NEWS_LINK_MONITOR_CLIENT_TIMEOUT", "15"))
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 Chrome/124.0 Safari/537.36"
@@ -278,6 +279,37 @@ def export_items_to_csv(data: dict[str, Any], export_dir: Path = EXPORT_DIR) -> 
 store = Store()
 cycle_lock = threading.Lock()
 stop_event = threading.Event()
+client_lock = threading.Lock()
+client_generation = 0
+client_last_seen: float | None = None
+
+
+def note_client_active() -> int:
+    global client_generation, client_last_seen
+    with client_lock:
+        client_generation += 1
+        client_last_seen = time.monotonic()
+        return client_generation
+
+
+def latest_client_generation() -> int:
+    with client_lock:
+        return client_generation
+
+
+def seconds_since_last_client() -> float | None:
+    with client_lock:
+        if client_last_seen is None:
+            return None
+        return time.monotonic() - client_last_seen
+
+
+def client_watchdog(server: ThreadingHTTPServer) -> None:
+    while not stop_event.wait(3):
+        elapsed = seconds_since_last_client()
+        if elapsed is not None and elapsed > CLIENT_TIMEOUT_SECONDS:
+            server.shutdown()
+            return
 
 
 def fetch(url: str, timeout: int = 20) -> tuple[str, str]:
@@ -543,10 +575,15 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         path = urllib.parse.urlsplit(self.path).path
         if path == "/api/state":
-            self.json_response(store.snapshot())
+            generation = note_client_active()
+            payload = store.snapshot()
+            payload["_client_generation"] = generation
+            self.json_response(payload)
             return
         if path == "/":
             path = "/index.html"
+        if path == "/index.html":
+            note_client_active()
         file_path = (STATIC_DIR / path.lstrip("/")).resolve()
         if STATIC_DIR.resolve() not in file_path.parents:
             self.send_bytes(b"Not found", "text/plain", 404)
@@ -586,6 +623,10 @@ class Handler(BaseHTTPRequestHandler):
             threading.Thread(target=run_cycle, daemon=True).start()
             self.json_response({"ok": True})
             return
+        if path == "/api/heartbeat":
+            generation = note_client_active()
+            self.json_response({"ok": True, "client_generation": generation})
+            return
         self.json_response({"error": "Not found"}, 404)
 
 
@@ -593,6 +634,7 @@ def main() -> None:
     monitor = threading.Thread(target=monitor_loop, daemon=True)
     monitor.start()
     server = ThreadingHTTPServer((HOST, PORT), Handler)
+    threading.Thread(target=client_watchdog, args=(server,), daemon=True).start()
     url = f"http://{HOST}:{PORT}"
     print(f"뉴스·게시물 링크 모니터가 실행 중입니다: {url}")
     if os.environ.get("NEWS_LINK_MONITOR_NO_BROWSER") != "1":

@@ -89,6 +89,15 @@ async function load() {
   await refreshState(true);
 }
 
+function sendHeartbeat() {
+  fetch("/api/heartbeat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+    keepalive: true
+  });
+}
+
 function readSources() {
   return [...document.querySelectorAll(".source-card")].map((node, index) => ({
     id: node.dataset.id || `source-${Date.now()}-${index}`,
@@ -138,3 +147,5 @@ load();
 setInterval(async () => {
   await refreshState();
 }, 10000);
+sendHeartbeat();
+setInterval(sendHeartbeat, 3000);

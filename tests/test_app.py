@@ -154,5 +154,14 @@ class ExportTests(unittest.TestCase):
             self.assertEqual(list(Path(temporary).iterdir()), [])
 
 
+class ShutdownTests(unittest.TestCase):
+    def test_note_client_active_increments_generation(self):
+        before = app.latest_client_generation()
+        generation = app.note_client_active()
+        self.assertEqual(generation, before + 1)
+        self.assertEqual(app.latest_client_generation(), before + 1)
+        self.assertIsNotNone(app.seconds_since_last_client())
+
+
 if __name__ == "__main__":
     unittest.main()
