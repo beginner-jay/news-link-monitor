@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>뉴스·게시물 링크 모니터</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header>
+    <div>
+      <p class="eyebrow">LOCAL LINK MONITOR</p>
+      <h1>뉴스·게시물 링크 모니터</h1>
+      <p class="subtitle">지정한 출처에서 키워드가 포함된 새 링크를 모읍니다.</p>
+    </div>
+    <button id="check-now" class="primary">지금 확인</button>
+  </header>
+  <main>
+    <section class="summary">
+      <div><strong id="item-count">0</strong><span>발견 링크</span></div>
+      <div><strong id="source-count">0</strong><span>활성 출처</span></div>
+      <div><strong id="last-cycle">-</strong><span>마지막 확인</span></div>
+    </section>
+    <section class="panel">
+      <div class="section-title">
+        <div><h2>출처 및 키워드</h2><p>줄바꿈 또는 쉼표로 키워드를 구분하세요.</p></div>
+        <button id="add-source">+ 출처 추가</button>
+      </div>
+      <div id="sources"></div>
+      <div class="settings-footer">
+        <label>확인 주기 <input id="interval" type="number" min="60" max="3600"> 초</label>
+        <button id="save" class="primary">설정 저장</button>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="section-title">
+        <div><h2>새로 발견한 링크</h2><p>동일 링크는 한 번만 표시합니다.</p></div>
+        <input id="filter" placeholder="결과 내 검색">
+      </div>
+      <div id="items" class="items"></div>
+    </section>
+  </main>
+  <template id="source-template">
+    <article class="source-card">
+      <div class="source-head">
+        <input class="source-enabled" type="checkbox">
+        <input class="source-name" placeholder="출처 이름">
+        <select class="source-type">
+          <option value="naver">네이버 뉴스 검색</option>
+          <option value="youtube">유튜브 채널</option>
+          <option value="web">공개 웹/SNS 페이지</option>
+        </select>
+        <button class="remove">삭제</button>
+      </div>
+      <input class="source-url" placeholder="https://...">
+      <textarea class="source-keywords" rows="3" placeholder="키워드 입력"></textarea>
+      <div class="source-status"></div>
+    </article>
+  </template>
+  <script src="/app.js"></script>
+</body>
+</html>
